@@ -4,6 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#f6e9ed">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="OurWorld ♡">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="./favicon-16x16.png">
 <title>OurWorld ♡</title>
 <style>
 :root{--bg:#f8f2f2;--paper:#fffdfc;--pink:#f0dce3;--rose:#b8758c;--deep:#754d5c;--ink:#33252b;--muted:#927e85;--line:#efe3e7;--shadow:0 16px 45px #78556812}
@@ -159,6 +166,13 @@ function showSavedDate(n,d){const date=new Date(d+'T00:00:00');if(Number.isNaN(d
 document.getElementById('saveDate').onclick=()=>{const n=document.getElementById('eventName').value.trim()||'Our special day',d=document.getElementById('eventDate').value;if(!d)return toast('Choose a date first ♡');showSavedDate(n,d);if(window.OW?.paired){window.OW.saveState('date',JSON.stringify({name:n,date:d}))}else if(putSaved('date',JSON.stringify({name:n,date:d})))toast('Date saved on this device ♡')};
 try{const savedDate=JSON.parse(getSaved('date')||'null');if(savedDate&&savedDate.name&&savedDate.date){document.getElementById('eventName').value=savedDate.name;document.getElementById('eventDate').value=savedDate.date;showSavedDate(savedDate.name,savedDate.date)}}catch(e){}
 
+</script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  });
+}
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
