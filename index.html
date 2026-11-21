@@ -191,7 +191,15 @@ const OW_CONFIG = {
   const OW = window.OW = { paired:false, sendPing, saveState };
   if (!configured) return;
   if (!window.supabase?.createClient) { el('setupBox').textContent='Supabase library could not load. Check your internet connection.'; return; }
-  const client = window.supabase.createClient(OW_CONFIG.url, OW_CONFIG.publishableKey);
+  // Keep the same Supabase storage key across releases, so existing sign-ins survive updates.
+  // Supabase refreshes expiring tokens automatically while this web app is active.
+  const client = window.supabase.createClient(OW_CONFIG.url, OW_CONFIG.publishableKey, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true
+    }
+  });
   let user = null, pairId = null, channel = null, lastInvite = '', lastPhotoObjectURL = '', reloadTimer = null, drawVersion = '';
   el('setupBox').classList.add('hidden');
   const toggle = (id, shown) => el(id).classList.toggle('hidden', !shown);
@@ -213,8 +221,12 @@ const OW_CONFIG = {
   }
   async function stopChannel() { if(channel){const old=channel;channel=null;await client.removeChannel(old)} }
   async function refreshAuth() {
-    const {data:{user:current},error}=await client.auth.getUser();
-    if (error && error.name!=='AuthSessionMissingError') throw error;
+    // First restore the persisted iPhone Home Screen session, including token refresh.
+    // getUser() needs an extra network request on every launch and made the login UI
+    // appear even when the phone still had a valid saved session.
+    const {data,error}=await client.auth.getSession();
+    if(error) throw error;
+    const current=data.session?.user ?? null;
     const changed = user?.id !== current?.id;
     if(changed) { await stopChannel(); pairId=null; OW.paired=false; lastInvite=''; toggle('inviteOutput',false); resetSharedUI(); }
     user=current;
@@ -343,10 +355,31 @@ const OW_CONFIG = {
       const linked=await saveState('photo',path);if(linked)el('photoStatus').textContent='Photo uploaded privately ♡';else el('photoStatus').textContent='Photo uploaded, but could not be linked; please try again.';
     }finally{bitmap.close()}
   });
-  client.auth.onAuthStateChange(()=>{setTimeout(()=>refreshAuth().catch(showError),0)});
-  resetSharedUI();refreshAuth().catch(showError);
-  window.addEventListener('focus',()=>{if(OW.paired)reloadAll().catch(showError)});
-  document.addEventListener('visibilitychange',()=>{if(!document.hidden&&OW.paired)reloadAll().catch(showError)});
+  // Do not show the sign-in form before the saved session has been checked.
+  setStatus('Restoring your private space ♡');
+  let authRefreshQueued=false;
+  function scheduleAuthRefresh(){
+    if(authRefreshQueued)return;
+    authRefreshQueued=true;
+    setTimeout(()=>{
+      authRefreshQueued=false;
+      refreshAuth().catch(showError);
+    },0);
+  }
+  client.auth.onAuthStateChange((event)=>{
+    if(['INITIAL_SESSION','SIGNED_IN','SIGNED_OUT','TOKEN_REFRESHED','USER_UPDATED'].includes(event)) scheduleAuthRefresh();
+  });
+  resetSharedUI();scheduleAuthRefresh();
+  window.addEventListener('focus',()=>{
+    scheduleAuthRefresh();
+    if(OW.paired)reloadAll().catch(showError);
+  });
+  document.addEventListener('visibilitychange',()=>{
+    if(!document.hidden){
+      scheduleAuthRefresh();
+      if(OW.paired)reloadAll().catch(showError);
+    }
+  });
 })();
 
 </script>
